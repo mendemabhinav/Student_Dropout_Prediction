@@ -1,0 +1,161 @@
+# =====================================================================
+# STEP 1: IMPORT REQUIRED LIBRARIES
+# =====================================================================
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import joblib
+
+# Optional: Upload your CSV file directly in Colab if not using Google Drive
+from google.colab import files
+uploaded = files.upload() # Select 'student_dropout_dataset_v3.csv'
+
+
+# =====================================================================
+# STEP 2: LOAD AND INSPECT DATASET
+# =====================================================================
+# Load CSV file (Adjust path if stored in Google Drive: '/content/drive/MyDrive/...')
+df = pd.read_csv('student_dropout_dataset_v3.csv')
+
+print("Dataset Shape:", df.shape)
+print("\nFirst 5 Rows:")
+display(df.head())
+
+
+# =====================================================================
+# STEP 3: PREPROCESSING & FEATURE ENCODING
+# =====================================================================
+# Clean column names (strip whitespace)
+df.columns = df.columns.str.strip()
+
+# Drop Student_ID column if present (Metadata, non-predictive)
+if 'Student_ID' in df.columns:
+    df = df.drop(columns=['Student_ID'])
+
+# Convert categorical string variables into numerical formats matching app.py
+binary_map = {'yes': 1, 'no': 0, 'Yes': 1, 'No': 0}
+gender_map = {'male': 1, 'female': 0, 'Male': 1, 'Female': 0}
+
+dept_map = {
+    'computer_science': 0, 'Engineering': 1, 'engineering': 1,
+    'Business': 2, 'business': 2, 'Arts': 3, 'arts': 3
+}
+
+parent_map = {
+    'high_school': 0, 'High School': 0,
+    'bachelors': 1, 'Bachelors': 1,
+    'masters': 2, 'Masters': 2
+}
+
+# Apply mappings
+if df['Gender'].dtype == 'O':
+    df['Gender'] = df['Gender'].map(gender_map).fillna(0)
+
+if df['Internet_Access'].dtype == 'O':
+    df['Internet_Access'] = df['Internet_Access'].map(binary_map).fillna(1)
+
+if df['Part_Time_Job'].dtype == 'O':
+    df['Part_Time_Job'] = df['Part_Time_Job'].map(binary_map).fillna(0)
+
+if df['Scholarship'].dtype == 'O':
+    df['Scholarship'] = df['Scholarship'].map(binary_map).fillna(0)
+
+if df['Department'].dtype == 'O':
+    df['Department'] = df['Department'].map(dept_map).fillna(0)
+
+if df['Parental_Education'].dtype == 'O':
+    df['Parental_Education'] = df['Parental_Education'].map(parent_map).fillna(1)
+
+# Ensure target column 'Dropout' is binary (1 for Dropout, 0 for Retained)
+if df['Dropout'].dtype == 'O':
+    dropout_map = {'Dropout': 1, 'Retained': 0, 'yes': 1, 'no': 0}
+    df['Dropout'] = df['Dropout'].map(dropout_map)
+
+
+# =====================================================================
+# STEP 4: SEPARATE FEATURES (X) AND TARGET (y)
+# =====================================================================
+# Define exact 17 features sequence
+feature_cols = [
+    'Age', 'Gender', 'Family_Income', 'Internet_Access', 'Study_Hours_per_Day',
+    'Attendance_Rate', 'Assignment_Delay_Days', 'Travel_Time_Minutes',
+    'Part_Time_Job', 'Scholarship', 'Stress_Index', 'GPA', 'Semester_GPA', 'CGPA',
+    'Semester', 'Department', 'Parental_Education'
+]
+
+X = df[feature_cols]
+y = df['Dropout']
+
+print(f"\nFeatures array shape: {X.shape} (17 Input Features)")
+print(f"Target array shape: {y.shape}")
+
+
+# =====================================================================
+# STEP 5: TRAIN / TEST SPLIT (80% Train, 20% Test)
+# =====================================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y
+)
+
+print(f"\nTraining set size: {len(X_train)} records")
+print(f"Testing set size: {len(X_test)} records")
+
+
+# =====================================================================
+# STEP 6: TRAIN DECISION TREE CLASSIFIER
+# =====================================================================
+clf = DecisionTreeClassifier(
+    criterion='gini',
+    max_depth=8,
+    min_samples_split=10,
+    random_state=42
+)
+
+clf.fit(X_train, y_train)
+print("\n✅ Decision Tree Model successfully trained!")
+
+
+# =====================================================================
+# STEP 7: EVALUATE MODEL ON 2,000 TEST RECORDS
+# =====================================================================
+y_pred = clf.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+conf_matrix = confusion_matrix(y_test, y_pred)
+
+print("\n" + "="*50)
+print(f"MODEL ACCURACY ON TEST SET: {accuracy * 100:.2f}%")
+print("="*50)
+
+print("\nCONFUSION MATRIX (2,000 Test Records):")
+print(conf_matrix)
+
+print("\nCLASSIFICATION REPORT:")
+print(classification_report(y_test, y_pred, target_names=['Retained (0)', 'Dropout (1)']))
+
+
+# =====================================================================
+# STEP 8: CHECK FEATURE IMPORTANCES & FEATURE NAMES
+# =====================================================================
+print("\nVERIFY 17 FEATURE NAMES IN ORDER:")
+print(clf.feature_names_in_)
+
+importance_df = pd.DataFrame({
+    'Feature': clf.feature_names_in_,
+    'Importance': clf.feature_importances_
+}).sort_values(by='Importance', ascending=False)
+
+print("\nFEATURE IMPORTANCE RANKING:")
+print(importance_df)
+
+
+# =====================================================================
+# STEP 9: EXPORT MODEL AS model.pkl
+# =====================================================================
+joblib.dump(clf, 'model.pkl')
+print("\n✅ Saved trained model to 'model.pkl'")
+
+# Download file directly to local browser (Colab feature)
+files.download('model.pkl')
